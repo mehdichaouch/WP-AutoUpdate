@@ -39,7 +39,7 @@ backup() {
   echo -e Backing up "${SITE}!\n"
   # Export Database and backup of website before continuing.
   wp-cli db export "${BACKUPPATH}/${SITE}.sql" --path="$SITE"
-  tar -czf "${BACKUPPATH}/${SITE}/${SITE}-${TIMESTAMP}.tar.gz" --exclude='./wp-content/updraft' .
+  tar -czf "${BACKUPPATH}/${SITE}/${SITE}-${TIMESTAMP}.tar.gz" --exclude='wp-content/updraft' .
   tar -czf "${BACKUPPATH}/${SITE}/${SITE}-${TIMESTAMP}.sql.tar.gz" "${BACKUPPATH}/${SITE}.sql" && rm "${BACKUPPATH}/${SITE}.sql"
   echo -e "\nBackup of ${SITE} complete!\n"
 }
@@ -49,8 +49,14 @@ update() {
   wp core update --path="$SITE"
 }
 for SITE in "${SITELIST[@]}"; do
-    update
-	# Enable or disable backups
-	#backup
+	# Check if wp-config file is different than webdir
+	if [[ "${SITE}" == *"html" ]]; then
+		cd "${SITESTORE}/$SITE/html"
+		update
+		backup
+	else
+		update
+		backup
+	fi
     echo -e "\nUpdate of ${SITE} complete!\n"
 done
