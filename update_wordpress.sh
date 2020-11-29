@@ -38,8 +38,9 @@ backup() {
     mkdir -p "${BACKUPPATH}/${SITENAME}" && echo -e "Created Backup Directory for ${SITE} in ${BACKUPPATH}/${SITENAME}\n"
   fi
   echo -e Backing up "${SITENAME}!\n"
-  # Export Database and backup of website before continuing.
-  wp db export "${BACKUPPATH}/${SITENAME}/${SITENAME}.sql" --path="$SITE" --allow-root
+  # Export Database
+  wp db export "${BACKUPPATH}/${SITENAME}/${TIMESTAMP}-${SITENAME}.sql" --path="$SITE" --allow-root
+  tar -czvf ${BACKUPPATH}/${SITENAME}/${TIMESTAMP}-${SITENAME}.tar.gz --exclude "$SITE/wp-content/updraft/*" ${SITE}
   echo -e "\nBackup of ${SITENAME} complete!\n"
 }
 # Update WordPress Core and Plugins
@@ -59,23 +60,20 @@ fi
 SITELIST=$(find "$SITESTORE" -name wp-config.php | sed "s/wp-config.php//g")
 
 # Clean out old backup files
-# cleanbackups
+cleanbackups
 
 for SITE in ${SITELIST[@]}; do
-	# Record the site folder name
-	SITENAME=$(echo $SITE | cut -d / -f 4)
 	# Check if site is using wp-config outside webroot
 	if [ -f "$SITE/wp-cron.php" ]; then
+			backup
 			update
 			echo -e "\nUpdate of ${SITE} complete!\n"
-			#backup
 		else
 	# If wp-cron.php doesn't exist, append the webroot to site directory.
 			COREDIR=$(find $SITE -name "wp-cron.php" | rev | cut -d / -f 2 | rev)
 			SITE=${SITE}${COREDIR}
-			echo $SITE
+			backup
 			update
 			echo -e "\nUpdate of ${SITE} complete!\n"
-			#backup
 	fi
 done
