@@ -26,31 +26,27 @@ echo -e "\n
         ╚██████╔╝██║     ██████╔╝██║  ██║   ██║   ███████╗██║  ██║
          ╚═════╝ ╚═╝     ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝\n
 "
-# Define all functions
+# Clean backups older than retention period.
 cleanbackups() {
-  # Clean out old backups.
   find "${BACKUPPATH}" -maxdepth 1 -type f -name '*.tar.gz' -mtime +"${OLDFILES}" -exec rm -rfv {} \;
   echo -e "\nBackups older than $OLDFILES days have been removed, if applicable."
 }
+# Complete rework of backup module and sitename logic required.
 backup() {
-# Need to sanitize website names here before creating backup directory.
-  if [ ! -d "${BACKUPPATH}/${SITE}" ]; then
-    mkdir -p "${BACKUPPATH}/${SITE}" && echo -e "Created Backup Directory for ${SITE} in ${BACKUPPATH}/${SITE}\n"
+  SITENAME=$(echo "$SITE" | cut -d / -f 4)
+  if [ ! -d "${BACKUPPATH}/${SITENAME}" ]; then
+    mkdir -p "${BACKUPPATH}/${SITENAME}" && echo -e "Created Backup Directory for ${SITE} in ${BACKUPPATH}/${SITENAME}\n"
   fi
-  # Clean out old backup files
-  cleanbackups
-  echo -e Backing up "${SITE}!\n"
+  echo -e Backing up "${SITENAME}!\n"
   # Export Database and backup of website before continuing.
-  sudo -u www-data wp db export "${BACKUPPATH}/${SITE}.sql" --path="$SITE"
-  tar -czf "${BACKUPPATH}/${SITE}/${SITE}-${TIMESTAMP}.tar.gz" --exclude='wp-content/updraft' .
-  tar -czf "${BACKUPPATH}/${SITE}/${SITE}-${TIMESTAMP}.sql.tar.gz" "${BACKUPPATH}/${SITE}.sql" && rm "${BACKUPPATH}/${SITE}.sql"
-  echo -e "\nBackup of ${SITE} complete!\n"
+  wp db export "${BACKUPPATH}/${SITENAME}/${SITENAME}.sql" --path="$SITE" --allow-root
+  echo -e "\nBackup of ${SITENAME} complete!\n"
 }
+# Update WordPress Core and Plugins
 update() {
-  # Update WordPress Core and Plugins
-  echo $SITE
-  sudo -u www-data wp plugin update --all --path="$SITE"
-  sudo -u www-data wp core update --path="$SITE"
+	sudo -u www-data wp core update --path="$SITE"
+	sudo -u www-data wp plugin update --all --path="$SITE"
+	sudo -u www-data wp theme update --all --path="$SITE"
 }
 # Check WP-CLI installation
 if [ ! -f "/usr/local/bin/wp" ]; then
@@ -59,10 +55,27 @@ if [ ! -f "/usr/local/bin/wp" ]; then
 	sudo mv wp-cli.phar /usr/local/bin/wp
 	echo -e "\nInstalled WP-Cli at /usr/local/bin/wp\n"
 fi
-# Primary application loop
-SITELIST=$(find "$SITESTORE" -name "wp-cron.php" | sed "s/wp-cron.php//g")
-for SITE in "${SITELIST[@]}"; do
-	backup
-	update
-	echo -e "\nUpdate of ${SITE} complete!\n"
+# WordPress Site Enumeration
+SITELIST=$(find "$SITESTORE" -name wp-config.php | sed "s/wp-config.php//g")
+
+# Clean out old backup files
+# cleanbackups
+
+for SITE in ${SITELIST[@]}; do
+	# Record the site folder name
+	SITENAME=$(echo $SITE | cut -d / -f 4)
+	# Check if site is using wp-config outside webroot
+	if [ -f "$SITE/wp-cron.php" ]; then
+			update
+			echo -e "\nUpdate of ${SITE} complete!\n"
+			#backup
+		else
+	# If wp-cron.php doesn't exist, append the webroot to site directory.
+			COREDIR=$(find $SITE -name "wp-cron.php" | rev | cut -d / -f 2 | rev)
+			SITE=${SITE}${COREDIR}
+			echo $SITE
+			update
+			echo -e "\nUpdate of ${SITE} complete!\n"
+			#backup
+	fi
 done
